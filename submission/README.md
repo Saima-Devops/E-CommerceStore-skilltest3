@@ -77,11 +77,16 @@ E-CommerceStore-skilltest3
 │
 ├── backend
 │   ├── user-service
+│            ├── Dockerfile 
 │   ├── product-service
+│            ├── Dockerfile 
 │   ├── order-service
+│            ├── Dockerfile 
 │   └── cart-service
+│            ├── Dockerfile 
 │
 ├── frontend
+│     ├── Dockerfile 
 │
 ├── terraform
 │   ├── provider.tf
@@ -171,6 +176,27 @@ docker build -t cart-service:v1 ./backend/cart-service
 docker build -t frontend-service:v1 ./frontend
 ```
 
+----
+
+```bash
+docker images
+```
+
+<img width="1254" height="126" alt="5" src="https://github.com/user-attachments/assets/e288165a-6881-43aa-babd-b3078a48ecd1" />
+
+----
+
+## Run the app locally
+
+<img width="1280" height="800" alt="3" src="https://github.com/user-attachments/assets/8cdcea85-33a0-4f88-a578-c357dd437f3d" />
+
+
+<img width="1254" height="697" alt="2" src="https://github.com/user-attachments/assets/7b9cb9b6-4a97-49d1-ab4c-2c3fa4d0bb12" />
+
+
+<img width="1280" height="800" alt="1" src="https://github.com/user-attachments/assets/7d13a1a4-ccd9-47dd-a889-10a3a334e8ce" />
+
+
 ---
 
 # 📦 Step 3 – Push Images to Docker Hub
@@ -208,6 +234,14 @@ docker push saim2026/e-commercestore:cart-service-v1
 
 docker push saim2026/e-commercestore:frontend-service-v1
 ```
+
+<img width="993" height="427" alt="6" src="https://github.com/user-attachments/assets/b70c3118-6b35-48f3-a83e-2d8e596d9a50" />
+
+
+<img width="1226" height="607" alt="7" src="https://github.com/user-attachments/assets/7a854a87-4b65-408e-ac1d-b96dc9aac076" />
+
+
+
 
 ---
 
@@ -293,13 +327,17 @@ saim2026/e-commercestore:frontend-service-v1
 
 # 🚀 Step 6 – Deploy Infrastructure
 
-Initialize Terraform:
+**Initialize Terraform:**
 
 ```bash
 terraform init
 ```
 
-Validate:
+<img width="795" height="562" alt="8" src="https://github.com/user-attachments/assets/f39e2711-7647-47eb-bc77-b24dc444179c" />
+
+----------
+
+**Validate:**
 
 ```bash
 terraform validate
@@ -311,17 +349,25 @@ Format:
 terraform fmt
 ```
 
-Preview:
+**Preview:**
 
 ```bash
 terraform plan
 ```
 
-Deploy:
+<img width="1190" height="676" alt="9" src="https://github.com/user-attachments/assets/6ed4f698-fe1a-4cb3-a037-cbae3a04660a" />
+
+------
+
+**Deploy:**
 
 ```bash
 terraform apply -auto-approve
 ```
+
+<img width="1091" height="787" alt="10" src="https://github.com/user-attachments/assets/09163f79-b235-4b62-a18b-289196d87a04" />
+
+
 
 ---
 
@@ -359,6 +405,11 @@ Expected:
 Frontend is Live
 ```
 
+<img width="1231" height="581" alt="14" src="https://github.com/user-attachments/assets/409efae6-318c-4fc5-aea2-64e1eb75a563" />
+
+
+<img width="1267" height="671" alt="12" src="https://github.com/user-attachments/assets/820a50ea-7a43-4675-81c3-66c6c9f94854" />
+
 ---
 
 ### Verify Containers
@@ -385,6 +436,10 @@ order-service
 cart-service
 ```
 
+<img width="1230" height="503" alt="13" src="https://github.com/user-attachments/assets/283f5e81-f4bd-4049-abe2-1255c941b583" />
+
+
+
 ---
 
 ### Verify Backend APIs
@@ -407,6 +462,8 @@ Order Service Running
 
 Cart Service Running
 ```
+
+<img width="1280" height="800" alt="15" src="https://github.com/user-attachments/assets/2fdcdeba-8332-451a-81cb-b50c232dc5e6" />
 
 ---
 
@@ -463,7 +520,7 @@ sequenceDiagram
 
 ---
 
-# 📸 Sample Output
+# Sample Output
 
 ```text
 terraform output
@@ -479,9 +536,12 @@ Frontend:
 Frontend is Live
 ```
 
+<img width="1267" height="671" alt="12" src="https://github.com/user-attachments/assets/3b411c06-4926-49bf-9be4-46f9fefd1475" />
+
+
 ---
 
-# 🏆 Conclusion
+# Conclusion
 
 This project successfully demonstrates an end-to-end DevOps workflow by combining:
 
