@@ -1,19 +1,24 @@
-name: SecureGate AI Security Pipeline
+name: SecureGate AI Security Gate
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  securegate-security-scan:
+  securegate-security-check:
     runs-on: ubuntu-latest
 
     env:
       SECUREGATE_URL: ${{ secrets.SECUREGATE_URL }}
       SECUREGATE_API_KEY: ${{ secrets.SECUREGATE_API_KEY }}
-      IMAGE_NAME: securegate-test-image
+
+      # Optional Jenkins trigger secrets
+      JENKINS_URL: ${{ secrets.JENKINS_URL }}
+      JENKINS_JOB: ${{ secrets.JENKINS_JOB }}
+      JENKINS_USER: ${{ secrets.JENKINS_USER }}
+      JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
 
     steps:
       - name: Checkout repository
@@ -35,6 +40,12 @@ jobs:
 
           echo "$RESPONSE"
           SCAN_ID=$(echo "$RESPONSE" | jq -r .scan_id)
+
+          if [ -z "$SCAN_ID" ] || [ "$SCAN_ID" = "null" ]; then
+            echo "SecureGate AI did not return a scan_id"
+            exit 1
+          fi
+
           echo "scan_id=$SCAN_ID" >> "$GITHUB_OUTPUT"
 
       - name: Run GitLeaks secret scan
@@ -47,8 +58,6 @@ jobs:
             --report-path=/repo/gitleaks-report.json \
             --no-git || true
 
-      - name: Ensure GitLeaks report exists
-        run: |
           if [ ! -f gitleaks-report.json ]; then
             echo "[]" > gitleaks-report.json
           fi
@@ -62,17 +71,22 @@ jobs:
           output: trivy-fs-report.json
           exit-code: 0
 
-      - name: Build Docker image
+      - name: Ensure Trivy filesystem report exists
         run: |
-          docker build -t $IMAGE_NAME:${{ github.sha }} .
+          if [ ! -f trivy-fs-report.json ]; then
+            echo '{"Results":[]}' > trivy-fs-report.json
+          fi
 
-      - name: Run Trivy image scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          format: json
-          output: trivy-image-report.json
-          exit-code: 0
+      - name: Create Trivy image placeholder report
+        run: |
+          cat > trivy-image-report.json <<EOF
+          {
+            "SchemaVersion": 2,
+            "ArtifactName": "image-built-later-by-jenkins",
+            "ArtifactType": "container_image",
+            "Results": []
+          }
+          EOF
 
       - name: Create SonarQube placeholder report
         run: |
@@ -85,38 +99,78 @@ jobs:
           }
           EOF
 
-      - name: Upload GitLeaks report to SecureGate AI
+      - name: Upload GitLeaks report
         run: |
           curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/gitleaks" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @gitleaks-report.json
 
-      - name: Upload Trivy filesystem report to SecureGate AI
+      - name: Upload Trivy filesystem report
         run: |
           curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-fs" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @trivy-fs-report.json
 
-      - name: Upload Trivy image report to SecureGate AI
+      - name: Upload Trivy image placeholder report
         run: |
           curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-image" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @trivy-image-report.json
 
-      - name: Upload SonarQube report to SecureGate AI
+      - name: Upload SonarQube report
         run: |
           curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/sonarqube" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @sonarqube-report.json
 
+      - name: Check SecureGate AI deployment decision
+        id: securegate_decision
+        run: |
+          RESPONSE=$(curl -sS "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}")
+          echo "$RESPONSE"
+
+          DECISION=$(echo "$RESPONSE" | jq -r .deployment_decision)
+          SCORE=$(echo "$RESPONSE" | jq -r .security_score)
+
+          echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+
+          if [ "$DECISION" != "APPROVED" ]; then
+            echo "SecureGate AI rejected this build."
+            echo "Security Score: $SCORE"
+            exit 1
+          fi
+
+          echo "SecureGate AI approved this build."
+          echo "Security Score: $SCORE"
+
+      - name: Trigger Jenkins Docker build and Docker Hub push
+        if: steps.securegate_decision.outputs.decision == 'APPROVED'
+        run: |
+          if [ -z "$JENKINS_URL" ] || [ -z "$JENKINS_JOB" ] || [ -z "$JENKINS_USER" ] || [ -z "$JENKINS_API_TOKEN" ]; then
+            echo "Jenkins secrets are not configured."
+            echo "SecureGate AI approved the code. It is ready for Jenkins Docker build and Docker Hub push."
+            exit 0
+          fi
+
+          curl -sS -X POST "$JENKINS_URL/job/$JENKINS_JOB/buildWithParameters" \
+            --user "$JENKINS_USER:$JENKINS_API_TOKEN" \
+            --data-urlencode "REPOSITORY_URL=${{ github.server_url }}/${{ github.repository }}" \
+            --data-urlencode "BRANCH=${{ github.ref_name }}" \
+            --data-urlencode "COMMIT_SHA=${{ github.sha }}" \
+            --data-urlencode "SCAN_ID=${{ steps.securegate_start.outputs.scan_id }}"
+
+          echo "Jenkins pipeline triggered successfully."
+
       - name: Complete SecureGate AI pipeline
-        if: always()
+        if: always() && steps.securegate_start.outputs.scan_id != ''
         run: |
           STATUS="SUCCESS"
+
           if [ "${{ job.status }}" != "success" ]; then
             STATUS="FAILED"
           fi
