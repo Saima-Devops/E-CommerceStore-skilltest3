@@ -31,7 +31,7 @@ jobs:
       - name: Start SecureGate AI scan
         id: securegate_start
         run: |
-          RESPONSE=$(curl -sS -X POST "$SECUREGATE_URL/api/v1/pipeline/start" \
+          RESPONSE=$(curl -fsS -X POST "$SECUREGATE_URL/api/v1/pipeline/start" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             -d "{
@@ -129,28 +129,28 @@ jobs:
 
       - name: Upload GitLeaks report
         run: |
-          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/gitleaks" \
+          curl -fsS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/gitleaks" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @gitleaks-report.json
 
       - name: Upload Trivy filesystem report
         run: |
-          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-fs" \
+          curl -fsS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-fs" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @trivy-fs-report.json
 
       - name: Upload Trivy image placeholder report
         run: |
-          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-image" \
+          curl -fsS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-image" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @trivy-image-report.json
 
       - name: Upload SonarQube report
         run: |
-          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/sonarqube" \
+          curl -fsS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/sonarqube" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @sonarqube-report.json
@@ -158,7 +158,7 @@ jobs:
       - name: Check SecureGate AI deployment decision
         id: securegate_decision
         run: |
-          RESPONSE=$(curl -sS "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}")
+          RESPONSE=$(curl -fsS "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}")
           echo "$RESPONSE"
 
           DECISION=$(echo "$RESPONSE" | jq -r .deployment_decision)
@@ -185,7 +185,7 @@ jobs:
             exit 0
           fi
 
-          curl -sS -X POST "$JENKINS_URL/job/$JENKINS_JOB/buildWithParameters" \
+          curl -fsS -X POST "$JENKINS_URL/job/$JENKINS_JOB/buildWithParameters" \
             --user "$JENKINS_USER:$JENKINS_API_TOKEN" \
             --data-urlencode "REPOSITORY_URL=${{ github.server_url }}/${{ github.repository }}" \
             --data-urlencode "BRANCH=${{ github.ref_name }}" \
@@ -203,7 +203,7 @@ jobs:
             STATUS="FAILED"
           fi
 
-          curl -sS -X POST "$SECUREGATE_URL/api/v1/pipeline/complete" \
+          curl -fsS -X POST "$SECUREGATE_URL/api/v1/pipeline/complete" \
             -H "Authorization: Bearer $SECUREGATE_API_KEY" \
             -H "Content-Type: application/json" \
             -d "{
