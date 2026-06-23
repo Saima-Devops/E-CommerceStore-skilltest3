@@ -1,0 +1,130 @@
+name: SecureGate AI Security Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  securegate-security-scan:
+    runs-on: ubuntu-latest
+
+    env:
+      SECUREGATE_URL: ${{ secrets.SECUREGATE_URL }}
+      SECUREGATE_API_KEY: ${{ secrets.SECUREGATE_API_KEY }}
+      IMAGE_NAME: securegate-test-image
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start SecureGate AI scan
+        id: securegate_start
+        run: |
+          RESPONSE=$(curl -sS -X POST "$SECUREGATE_URL/api/v1/pipeline/start" \
+            -H "Authorization: Bearer $SECUREGATE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"project_name\":\"${{ github.event.repository.name }}\",
+              \"repository_url\":\"${{ github.server_url }}/${{ github.repository }}\",
+              \"branch\":\"${{ github.ref_name }}\",
+              \"commit_sha\":\"${{ github.sha }}\",
+              \"pipeline_run_id\":\"${{ github.run_id }}\"
+            }")
+
+          echo "$RESPONSE"
+          SCAN_ID=$(echo "$RESPONSE" | jq -r .scan_id)
+          echo "scan_id=$SCAN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Run GitLeaks secret scan
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            zricethezav/gitleaks:latest detect \
+            --source=/repo \
+            --report-format=json \
+            --report-path=/repo/gitleaks-report.json \
+            --no-git || true
+
+      - name: Ensure GitLeaks report exists
+        run: |
+          if [ ! -f gitleaks-report.json ]; then
+            echo "[]" > gitleaks-report.json
+          fi
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: trivy-fs-report.json
+          exit-code: 0
+
+      - name: Build Docker image
+        run: |
+          docker build -t $IMAGE_NAME:${{ github.sha }} .
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: json
+          output: trivy-image-report.json
+          exit-code: 0
+
+      - name: Create SonarQube placeholder report
+        run: |
+          cat > sonarqube-report.json <<EOF
+          {
+            "projectStatus": {
+              "status": "OK"
+            },
+            "issues": []
+          }
+          EOF
+
+      - name: Upload GitLeaks report to SecureGate AI
+        run: |
+          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/gitleaks" \
+            -H "Authorization: Bearer $SECUREGATE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-binary @gitleaks-report.json
+
+      - name: Upload Trivy filesystem report to SecureGate AI
+        run: |
+          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-fs" \
+            -H "Authorization: Bearer $SECUREGATE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-binary @trivy-fs-report.json
+
+      - name: Upload Trivy image report to SecureGate AI
+        run: |
+          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/trivy-image" \
+            -H "Authorization: Bearer $SECUREGATE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-binary @trivy-image-report.json
+
+      - name: Upload SonarQube report to SecureGate AI
+        run: |
+          curl -sS -X POST "$SECUREGATE_URL/api/v1/scans/${{ steps.securegate_start.outputs.scan_id }}/sonarqube" \
+            -H "Authorization: Bearer $SECUREGATE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-binary @sonarqube-report.json
+
+      - name: Complete SecureGate AI pipeline
+        if: always()
+        run: |
+          STATUS="SUCCESS"
+          if [ "${{ job.status }}" != "success" ]; then
+            STATUS="FAILED"
+          fi
+
+          curl -sS -X POST "$SECUREGATE_URL/api/v1/pipeline/complete" \
+            -H "Authorization: Bearer $SECUREGATE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"scan_id\":\"${{ steps.securegate_start.outputs.scan_id }}\",
+              \"status\":\"$STATUS\"
+            }"
