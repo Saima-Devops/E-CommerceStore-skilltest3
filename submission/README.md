@@ -541,6 +541,18 @@ Frontend is Live
 
 ---
 
+## Terraform Destroy
+
+Terraform provides a simple way to remove all provisioned infrastructure when it is no longer needed. The `terraform destroy` command automatically identifies and deletes all resources defined in the Terraform configuration, helping prevent unnecessary cloud costs and ensuring a clean environment.
+
+```bash
+terraform destroy
+```
+
+Before deleting resources, Terraform displays an execution plan showing which resources will be removed and requests confirmation. This makes infrastructure cleanup safe, predictable, and fully automated.
+
+-----
+
 # Conclusion
 
 This project successfully demonstrates an end-to-end DevOps workflow by combining:
