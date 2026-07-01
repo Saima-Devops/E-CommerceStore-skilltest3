@@ -28,10 +28,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@COMMIT_SHA
+        uses: actions/checkout@v5
 
       - name: Setup Node.js 24
-        uses: actions/setup-node@COMMIT_SHA
+        uses: actions/setup-node@v5
         with:
           node-version: "24"
 
